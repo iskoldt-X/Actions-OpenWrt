@@ -233,6 +233,39 @@ jobs:
         cd openwrt
         echo -e "$(nproc) thread compile"
         make tools/install
+        # 查找 po2lmo 的位置
+        echo "Searching for po2lmo in the build directory..."
+        find . -type f -name "po2lmo" -exec ls -l {} \; || echo "po2lmo not found using find command."
+    
+        # 检查 po2lmo 是否在预期位置
+        if [ ! -f staging_dir/host/bin/po2lmo ]; then
+          echo "po2lmo not found at staging_dir/host/bin/po2lmo"
+      
+          # 尝试在其他可能的目录中查找 po2lmo
+          PO2LMO_PATH=$(find . -type f -name "po2lmo" | head -n 1)
+          if [ -n "$PO2LMO_PATH" ]; then
+            echo "Found po2lmo at $PO2LMO_PATH"
+            export PATH=$(dirname "$PO2LMO_PATH"):$PATH
+          else
+            echo "po2lmo could not be found anywhere in the build directory."
+            exit 1
+          fi
+        else
+          echo "po2lmo is available at staging_dir/host/bin/po2lmo"
+          # 添加 host 工具路径到 PATH
+          export PATH=$(pwd)/staging_dir/host/bin:$PATH
+        fi
+    
+        # 验证 po2lmo 是否在 PATH 中
+        if ! command -v po2lmo &> /dev/null; then
+          echo "po2lmo could not be found in PATH"
+          exit 1
+        fi
+        echo "po2lmo is available at $(which po2lmo)"
+    
+        # 列出 PATH 中的 po2lmo 位置
+        echo "Listing all po2lmo instances in PATH:"
+        which -a po2lmo
         make -j$(nproc) || make -j1 || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
