@@ -55,13 +55,12 @@ jobs:
         env:
           MATRIXS: ${{ github.event.inputs.devices }}
         run: |
-          if [ -z $MATRIXS ]; then
+          if [ -z "$MATRIXS" ]; then
             MATRIXS='["x86_64"]'
           fi
           echo "matrix=$MATRIXS" >> $GITHUB_OUTPUT
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }} 
-
 
   build:
     needs: create-matrix
@@ -89,7 +88,7 @@ jobs:
         echo -e "$(sudo lshw -short -C memory | grep GiB) \n"
         echo "--------------------------硬盘信息--------------------------"
         echo "硬盘数量：$(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
-        
+
     - name: "Optimize Disk Space"
       uses: "hugoalh/disk-space-optimizer-ghaction@v0.8.0"
       with:
@@ -195,11 +194,11 @@ jobs:
         sed -i 's/192.168.1.1/192.168.100.1/g' package/base-files/files/bin/config_generate
         git clone https://github.com/SAENE/luci-theme-design.git  package/luci-theme-design
         DateTime=`date -R`
-        sed -i "746 a \\\t\t<tr><td width="33%">编译时间<\/td><td>$DateTime<\/td><\/tr>" package/lean/autocore/files/x86/index.htm
-        #sed -i "709 a \\\t\t<tr><td width="33%">编译时间<\/td><td>$DateTime<\/td><\/tr>" feeds/luci/modules/luci-mod-admin-full/luasrc/view/admin_status/index.htm
+        sed -i "746 a \\\t\t<tr><td width=\"33%\">编译时间<\/td><td>$DateTime<\/td><\/tr>" package/lean/autocore/files/x86/index.htm
+        #sed -i "709 a \\\t\t<tr><td width=\"33%\">编译时间<\/td><td>$DateTime<\/td><\/tr>" feeds/luci/modules/luci-mod-admin-full/luasrc/view/admin_status/index.htm
         wget https://raw.githubusercontent.com/liwenjie119/packages/dev/net/openssh/patches/0001-fix-root-login.patch -P ./feeds/packages/net/openssh/patches
         sed -i 's/stripped/release/g' feeds/packages/multimedia/aliyundrive-webdav/Makefile
-        
+
 
     - name: Get architecture
       working-directory: ${{ github.workspace }}/openwrt
@@ -217,27 +216,104 @@ jobs:
         clean: ${{github.event.inputs.clean}}
         prefix: ${{ github.workspace }}/openwrt
 
-
     - name: Download package
       id: package
       run: |
         cd openwrt
-        echo -e 'CONFIG_DEVEL=y\nCONFIG_CCACHE=y' >> .config; make defconfig
+        echo -e 'CONFIG_DEVEL=y\nCONFIG_CCACHE=y' >> .config
+        make defconfig
         make download -j8
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
+    # **新增步骤：编译 luci-base**
+    - name: Compile luci-base
+      run: |
+        cd openwrt
+        echo "Compiling luci-base to ensure po2lmo is built first..."
+        make package/feeds/luci/luci-base/compile V=99 || { echo "Failed to compile luci-base"; exit 1; }
+        echo "luci-base compiled successfully."
+
+    # **修改后的 Compile the firmware 步骤**
     - name: Compile the firmware
       id: compile
       run: |
+        set -x  # 开启命令追踪，便于调试
         cd openwrt
-        echo -e "$(nproc) thread compile"
+        echo "$(nproc) thread compile"
+        
+        # 移除 luci-app-openclash 中的自定义 po2lmo
         rm -f ./feeds/luci/applications/luci-app-openclash/tools/po2lmo/src/po2lmo
-        make -j$(nproc) || make -j1 || make -j1 V=s
+        
+        # 构建工具链，包括标准的 po2lmo
+        make tools/install tools/i18n/install V=s 2>&1 | tee build_tools_i18n.log
+        
+        # 查找 po2lmo 的位置
+        echo "Searching for po2lmo in the build directory..."
+        find . -type f -name "po2lmo" -exec ls -l {} \; || echo "po2lmo not found using find command."
+        
+        # 列出 staging_dir/host/bin 目录内容
+        echo "Listing staging_dir/host/bin contents:"
+        ls -la staging_dir/host/bin
+        
+        # 检查 po2lmo 是否在预期位置
+        if [ ! -f staging_dir/host/bin/po2lmo ]; then
+          echo "po2lmo not found at staging_dir/host/bin/po2lmo"
+          
+          # 尝试在其他可能的目录中查找 po2lmo
+          PO2LMO_PATH=$(find . -type f -name "po2lmo" | head -n 1)
+          if [ -n "$PO2LMO_PATH" ]; then
+            echo "Found po2lmo at $PO2LMO_PATH"
+            # 编译 po2lmo（如果需要）
+            cd $(dirname "$PO2LMO_PATH")
+            make 2>&1 | tee -a ../../../build_tools_i18n.log
+            # 复制到 staging_dir/host/bin
+            mkdir -p ../../../staging_dir/host/bin
+            cp po2lmo ../../../staging_dir/host/bin/
+          else
+            echo "po2lmo could not be found anywhere in the build directory."
+            exit 1
+          fi
+        else
+          echo "po2lmo is available at staging_dir/host/bin/po2lmo"
+          # 添加 host 工具路径到 PATH
+          export PATH=$(pwd)/staging_dir/host/bin:$PATH
+        fi
+        
+        # 验证 po2lmo 是否在 PATH 中
+        if ! command -v po2lmo &> /dev/null; then
+          echo "po2lmo could not be found in PATH"
+          exit 1
+        fi
+        echo "po2lmo is available at $(which po2lmo)"
+        
+        # 列出 PATH 中的 po2lmo 位置
+        echo "Listing all po2lmo instances in PATH:"
+        which -a po2lmo
+        
+        # 继续编译，并记录日志
+        make -j$(nproc) V=s 2>&1 | tee build_firmware.log || make -j1 V=s 2>&1 | tee -a build_firmware.log || make -j1 V=sc 2>&1 | tee -a build_firmware.log
+        
+        # 设置输出和环境变量
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+
+    # **新增步骤：上传详细的构建日志（如果失败）**
+    - name: Upload build_tools_i18n.log
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: build_tools_i18n.log
+        path: openwrt/build_tools_i18n.log
+
+    - name: Upload build_firmware.log
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: build_firmware.log
+        path: openwrt/build_firmware.log
 
     - name: Check space usage
       if: (!cancelled())
@@ -304,7 +380,6 @@ jobs:
         tag: ${{ steps.tag.outputs.release_tag }}
         bodyFile: "release.txt"
         artifacts: ${{ env.FIRMWARE }}/*
-
 
     - name: Delete workflow runs
       uses: Mattraks/delete-workflow-runs@v2
