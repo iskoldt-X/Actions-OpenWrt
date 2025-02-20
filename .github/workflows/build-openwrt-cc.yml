@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       devices:
-        description: '["x86_64","newifi-d2","cr660x","psg1218a"]'
+        description: '["x86_64"]'
         default: '["x86_64"]'
       clean:
         description: 'clean ccache'
@@ -90,7 +90,7 @@ jobs:
         echo "硬盘数量：$(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
 
     - name: "Optimize Disk Space"
-      uses: "hugoalh/disk-space-optimizer-ghaction@v0.8.0"
+      uses: "hugoalh/disk-space-optimizer-ghaction@main"
       with:
         operate_sudo: "True"
         general_include: ".+"
@@ -232,55 +232,6 @@ jobs:
         set -x  # 开启命令追踪，便于调试
         cd openwrt
         echo "$(nproc) thread compile"
-        
-        # 移除 luci-app-openclash 中的自定义 po2lmo
-        rm -f ./feeds/luci/applications/luci-app-openclash/tools/po2lmo/src/po2lmo
-        
-        # 构建工具链，包括标准的 po2lmo
-        make tools/install tools/i18n/install V=s 2>&1 | tee build_tools_i18n.log
-        
-        # 查找 po2lmo 的位置
-        echo "Searching for po2lmo in the build directory..."
-        find . -type f -name "po2lmo" -exec ls -l {} \; || echo "po2lmo not found using find command."
-        
-        # 列出 staging_dir/host/bin 目录内容
-        echo "Listing staging_dir/host/bin contents:"
-        ls -la staging_dir/host/bin
-        
-        # 检查 po2lmo 是否在预期位置
-        if [ ! -f staging_dir/host/bin/po2lmo ]; then
-          echo "po2lmo not found at staging_dir/host/bin/po2lmo"
-          
-          # 尝试在其他可能的目录中查找 po2lmo
-          PO2LMO_PATH=$(find . -type f -name "po2lmo" | head -n 1)
-          if [ -n "$PO2LMO_PATH" ]; then
-            echo "Found po2lmo at $PO2LMO_PATH"
-            # 编译 po2lmo（如果需要）
-            cd $(dirname "$PO2LMO_PATH")
-            make 2>&1 | tee -a ../../../build_tools_i18n.log
-            # 复制到 staging_dir/host/bin
-            mkdir -p ../../../staging_dir/host/bin
-            cp po2lmo ../../../staging_dir/host/bin/
-          else
-            echo "po2lmo could not be found anywhere in the build directory."
-            exit 1
-          fi
-        else
-          echo "po2lmo is available at staging_dir/host/bin/po2lmo"
-          # 添加 host 工具路径到 PATH
-          export PATH=$(pwd)/staging_dir/host/bin:$PATH
-        fi
-        
-        # 验证 po2lmo 是否在 PATH 中
-        if ! command -v po2lmo &> /dev/null; then
-          echo "po2lmo could not be found in PATH"
-          exit 1
-        fi
-        echo "po2lmo is available at $(which po2lmo)"
-        
-        # 列出 PATH 中的 po2lmo 位置
-        echo "Listing all po2lmo instances in PATH:"
-        which -a po2lmo
         
         # 继续编译，并记录日志
         make -j$(nproc) V=s 2>&1 | tee build_firmware.log || make -j1 V=s 2>&1 | tee -a build_firmware.log || make -j1 V=sc 2>&1 | tee -a build_firmware.log
