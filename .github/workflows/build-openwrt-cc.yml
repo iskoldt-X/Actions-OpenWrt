@@ -303,14 +303,14 @@ jobs:
     # **新增步骤：上传详细的构建日志（如果失败）**
     - name: Upload build_tools_i18n.log
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@main
       with:
         name: build_tools_i18n.log
         path: openwrt/build_tools_i18n.log
 
     - name: Upload build_firmware.log
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@main
       with:
         name: build_firmware.log
         path: openwrt/build_firmware.log
