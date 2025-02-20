@@ -132,7 +132,7 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/apt/sources.list.d /usr/local/lib/android /opt/ghc \
+        sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android /opt/ghc \
         /usr/share/dotnet /usr/local/graalvm /usr/local/.ghcup \
         /usr/local/share/powershell /usr/local/share/chromium /usr/local/lib/node_modules
         sudo -E apt-get -y purge azure-cli* ghc* zulu* hhvm* llvm* firefox google* dotnet* powershell openjdk* adoptopenjdk* mysql* php* mongodb* docker* dotnet* moby* snapd* || true
