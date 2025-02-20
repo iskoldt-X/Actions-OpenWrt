@@ -9,7 +9,7 @@
 # https://github.com/liwenjie119/Actions-OpenWrt
 # 硬盘释放来自于https://github.com/dzlea/ActionsBuildOpenWRT
 
-name: Build OpenWrt-cc
+name: Build OpenWrt
 
 on:
   repository_dispatch:
@@ -23,7 +23,7 @@ on:
         default: 'false'
         
   schedule:
-    - cron: 0 8 * * 3,5
+    - cron: "0 3 * * 1"
   watch:
     types: started
   push:
@@ -225,6 +225,11 @@ jobs:
     - name: Check space usage
       if: (!cancelled())
       run: df -hT
+
+    - name: Check Server Performance again
+      run: |
+        echo "--------------------------硬盘信息--------------------------"
+        echo "硬盘数量：$(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
 
     - name: Upload bin directory
       uses: actions/upload-artifact@main
