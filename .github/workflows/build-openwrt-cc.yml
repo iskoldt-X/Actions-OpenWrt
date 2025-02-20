@@ -226,15 +226,6 @@ jobs:
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
-    # **新增步骤：编译 luci-base**
-    - name: Compile luci-base
-      run: |
-        cd openwrt
-        echo "Compiling luci-base to ensure po2lmo is built first..."
-        make package/feeds/luci/luci-base/compile V=99 || { echo "Failed to compile luci-base"; exit 1; }
-        echo "luci-base compiled successfully."
-
-    # **修改后的 Compile the firmware 步骤**
     - name: Compile the firmware
       id: compile
       run: |
