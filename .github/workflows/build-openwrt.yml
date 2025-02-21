@@ -30,7 +30,7 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/build-openwrt-cc.yml'
+      - '.github/workflows/build-openwrt.yml'
       
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
