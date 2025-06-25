@@ -11,6 +11,9 @@
 name: JDCloud-AX6000-Baili-hanwckf
 
 on:
+  push:
+    branches:
+      - immortal
   repository_dispatch:
   workflow_dispatch:
     inputs:
