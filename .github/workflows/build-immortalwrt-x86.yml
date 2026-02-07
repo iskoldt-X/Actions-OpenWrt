@@ -76,10 +76,8 @@ jobs:
 
     - name: Load custom configuration
       run: |
+        [ -e $GITHUB_WORKSPACE/immortalwrt-x86.config ] && cp $GITHUB_WORKSPACE/immortalwrt-x86.config openwrt/.config
         cd openwrt
-        # Create a default x86 config
-        echo "CONFIG_TARGET_x86=y" > .config
-        echo "CONFIG_TARGET_x86_64=y" >> .config
         make defconfig
 
     - name: Download package
