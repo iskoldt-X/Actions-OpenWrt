@@ -47,7 +47,7 @@ env:
 
 jobs:
   create-matrix:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: Create Matrix
     steps:
       - name: Set Matrix
@@ -71,7 +71,7 @@ jobs:
       matrix:
         device: ${{ fromJSON(needs.create-matrix.outputs.matrix) }}
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 1000
 
     steps:
