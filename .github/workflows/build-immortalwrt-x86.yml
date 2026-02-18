@@ -9,6 +9,9 @@ on:
         required: false
         default: 'false'
 
+  schedule:
+    - cron: "0 3 * * 1"    
+
 env:
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-25.12
