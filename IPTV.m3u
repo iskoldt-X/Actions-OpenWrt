@@ -1,0 +1,24 @@
+#EXTM3U
+#EXTINF:-1 tvg-name="CCTV-1" group-title="央视频道",CCTV-1高清
+http://192.168.86.1:7088/rtp/239.253.92.83:8012
+#EXTINF:-1 tvg-name="CCTV-5" group-title="央视频道",CCTV-5高清
+http://192.168.86.1:7088/rtp/239.253.92.181:6046
+#EXTINF:-1 tvg-name="CCTV-8" group-title="央视频道",CCTV-8高清
+http://192.168.86.1:7088/rtp/239.253.92.195:6060
+#EXTINF:-1 tvg-name="CCTV-13" group-title="央视频道",CCTV-13高清
+http://192.168.86.1:7088/rtp/239.253.92.13:8008
+
+#EXTINF:-1 tvg-name="河北卫视" group-title="河北频道",河北卫视高清
+http://192.168.86.1:7088/rtp/239.253.92.154:6011
+#EXTINF:-1 tvg-name="河北都市" group-title="河北频道",河北都市高清
+http://192.168.86.1:7088/rtp/239.253.92.172:6002
+
+#EXTINF:-1 tvg-name="邢台综合" group-title="本地频道",邢台综合
+http://192.168.86.1:7088/rtp/239.253.93.8:6161
+#EXTINF:-1 tvg-name="邢台城市生活" group-title="本地频道",邢台城市生活
+http://192.168.86.1:7088/rtp/239.253.93.10:6163
+
+#EXTINF:-1 tvg-name="湖南卫视" group-title="卫视频道",湖南卫视高清
+http://192.168.86.1:7088/rtp/239.253.92.84:8015
+#EXTINF:-1 tvg-name="浙江卫视" group-title="卫视频道",浙江卫视高清
+http://192.168.86.1:7088/rtp/239.253.92.90:8020
