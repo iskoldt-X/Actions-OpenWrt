@@ -1,4 +1,4 @@
-name: Build ImmortalWrt x86 SSR+
+name: Build ImmortalWrt AX6000 SSR+
 
 on:
   repository_dispatch:
