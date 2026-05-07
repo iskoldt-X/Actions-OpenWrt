@@ -160,6 +160,90 @@ scp -O root@192.168.1.1:/tmp/backup-fip.bin         ~/Downloads/
 sync
 ```
 
+### 0.4 Verify build offsets before flashing
+
+Before writing anything irreversible, sanity-check that the `dd` offsets used in Phase 3 actually match (a) what this build's `gpt.bin` encodes and (b) what is currently on the device. The three offsets come from three different sources, so they need three independent checks:
+
+| Phase 3 step | Offset | Source of truth |
+|---|---|---|
+| 3.1 GPT | `seek=0 count=34` | GPT spec (always 34 sectors for the primary header + table) |
+| 3.2 BL2 | write to `/dev/mmcblk0boot0` | MT7986 BootROM convention |
+| 3.3 FIP | `seek=13312` | OpenWrt build script + U-Boot defconfig — **not** stored in `gpt.bin` |
+
+Note: `gpt.bin` only verifies the GPT layout. The FIP offset must be checked separately against the live disk.
+
+#### Check 1 — Parse `gpt.bin` itself (what the new build will install)
+
+Copy `gpt.bin` to the router now (Phase 2 will copy the rest later):
+
+```sh
+# from Mac
+scp -O ~/Downloads/openwrt-custom/immortalwrt-mediatek-filogic-jdcloud_re-cp-03-gpt.bin \
+       root@192.168.1.1:/tmp/
+```
+
+On the router, parse it as a disk image (use whichever tool is installed):
+
+```sh
+parted /tmp/immortalwrt-mediatek-filogic-jdcloud_re-cp-03-gpt.bin unit s print
+# or
+sgdisk -p /tmp/immortalwrt-mediatek-filogic-jdcloud_re-cp-03-gpt.bin
+# or, in a pinch
+fdisk -l /tmp/immortalwrt-mediatek-filogic-jdcloud_re-cp-03-gpt.bin
+```
+
+You should see a partition list that includes a rootfs / fitrw partition of about **4 194 304 sectors (~2 GB)** — the result of `CONFIG_TARGET_ROOTFS_PARTSIZE=2048`. If that partition is still ~100 MB, this is **not** the custom build and Phase 3 will not give you what you expect.
+
+#### Check 2 — Compare against the live GPT on the device
+
+```sh
+parted /dev/mmcblk0 unit s print
+# or
+sgdisk -p /dev/mmcblk0
+```
+
+Diff the partition starting LBAs against Check 1. Rules of thumb:
+
+- The rootfs / fitrw partition **start LBA** should be the same in both. Its **end LBA** (and therefore size) is the only intentional change.
+- All other partitions (`bl2`, `fip`, `factory`, `kernel`, etc., depending on the layout) should start at the **same LBA** in both outputs.
+- If non-rootfs partition starts differ, **stop** — the new GPT would shift FIP/env/factory regions and the BL2 won't find them.
+
+#### Check 3 — Confirm FIP really lives at sector 13312 on this device
+
+The FIP offset is not in `gpt.bin`; it's hardcoded in U-Boot. Verify by reading the FIP TOC magic at the expected sector on the live disk:
+
+```sh
+dd if=/dev/mmcblk0 bs=512 skip=13312 count=1 2>/dev/null | hexdump -C | head -1
+```
+
+Expected output (the four leading bytes are the little-endian encoding of `0xAA640001`, the FIP TOC header magic):
+
+```text
+00000000  01 00 64 aa ...
+```
+
+If you see those four bytes, sector 13312 is the real FIP start, and `seek=13312` in Phase 3.3 is correct for this device.
+
+If you do **not** see them, scan the first 16 MB to find the actual FIP sector before continuing:
+
+```sh
+dd if=/dev/mmcblk0 bs=1M count=16 2>/dev/null | hexdump -C | grep -m1 "01 00 64 aa"
+# Divide the left-column byte offset by 512 to get the real sector.
+# If it is not 13312, do NOT use the offsets in this guide as-is.
+```
+
+#### Check 4 — Confirm platform scripts agree on the offsets
+
+The currently installed sysupgrade scripts encode the same conventions; if they agree, this guide is aligned with upstream:
+
+```sh
+grep -rEn "13312|0x680000|mmcblk0boot0|fip" /lib/upgrade/ 2>/dev/null
+```
+
+You should see references to `/dev/mmcblk0boot0` (preloader target) and to the FIP offset as either `13312` (decimal sectors) or `0x680000` (decimal bytes 6 815 744 = 13312 × 512).
+
+**Only proceed to Phase 1 if all four checks pass.** If any disagree, stop and figure out why before writing bootloader components.
+
 ---
 
 ## Phase 1 — Prepare the Mac
