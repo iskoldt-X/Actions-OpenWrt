@@ -117,10 +117,10 @@ jobs:
       id: tag
       if: env.UPLOAD_RELEASE == 'true' && !cancelled()
       run: |
-        echo "release_tag=ImmortalWrt-x86-${{ env.FILE_DATE }}" >> $GITHUB_OUTPUT
+        echo "release_tag=ImmortalWrt-AX6000-${{ env.FILE_DATE }}" >> $GITHUB_OUTPUT
         touch release.txt
         echo "status=success" >> $GITHUB_OUTPUT
-        echo "body=ImmortalWrt x86 build" >> $GITHUB_OUTPUT
+        echo "body=ImmortalWrt AX6000 build" >> $GITHUB_OUTPUT
 
     - name: Upload firmware to release
       uses: ncipollo/release-action@v1
