@@ -72,6 +72,8 @@ jobs:
       run: |
         [ -e $GITHUB_WORKSPACE/immortalwrt-SSR-x86.config ] && cp $GITHUB_WORKSPACE/immortalwrt-SSR-x86.config openwrt/.config
         cd openwrt
+        git clone --depth=1 -b js https://github.com/iskoldt-X/luci-theme-design.git package/luci-theme-design
+        grep -qxF 'CONFIG_PACKAGE_luci-theme-design=y' .config || echo 'CONFIG_PACKAGE_luci-theme-design=y' >> .config
         make defconfig
 
     - name: Download package

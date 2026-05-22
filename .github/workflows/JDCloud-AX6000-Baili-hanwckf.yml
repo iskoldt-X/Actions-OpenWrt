@@ -143,6 +143,8 @@ jobs:
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
+        git clone --depth=1 -b js https://github.com/iskoldt-X/luci-theme-design.git package/luci-theme-design
+        grep -qxF 'CONFIG_PACKAGE_luci-theme-design=y' .config || echo 'CONFIG_PACKAGE_luci-theme-design=y' >> .config
 
     - name: 设置LAN IP地址（路由器登录地址）
       run: |
