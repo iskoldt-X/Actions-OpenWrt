@@ -77,8 +77,8 @@ jobs:
         
         # 你的 IP 修改逻辑
         sed -i "s/192.168.1.1/${{ github.event.inputs.LAN_IP }}/g" package/base-files/files/bin/config_generate
-        git clone --depth=1 -b js https://github.com/iskoldt-X/luci-theme-design.git package/luci-theme-design
-        grep -qxF 'CONFIG_PACKAGE_luci-theme-design=y' .config || echo 'CONFIG_PACKAGE_luci-theme-design=y' >> .config
+        git clone --depth=1 -b js https://github.com/iskoldt-X/luci-theme-design.git package/luci-theme-design-x
+        grep -qxF 'CONFIG_PACKAGE_luci-theme-design-x=y' .config || echo 'CONFIG_PACKAGE_luci-theme-design-x=y' >> .config
 
     - name: Download Packages
       run: |
