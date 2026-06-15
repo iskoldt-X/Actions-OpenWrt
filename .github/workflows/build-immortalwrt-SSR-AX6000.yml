@@ -74,6 +74,7 @@ jobs:
         cd openwrt
         git clone --depth=1 -b js https://github.com/iskoldt-X/luci-theme-design.git package/luci-theme-design-x
         grep -qxF 'CONFIG_PACKAGE_luci-theme-design-x=y' .config || echo 'CONFIG_PACKAGE_luci-theme-design-x=y' >> .config
+        [ -d "$GITHUB_WORKSPACE/files" ] && { mkdir -p files; cp -a "$GITHUB_WORKSPACE/files/." files/; }
         make defconfig
 
     - name: Download package
