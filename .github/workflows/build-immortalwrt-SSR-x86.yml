@@ -66,7 +66,7 @@ jobs:
       run: cd openwrt && ./scripts/feeds update -a
 
     - name: Install feeds
-      run: cd openwrt && ./scripts/feeds install -a && ./scripts/feeds install -p helloworld -f xray-core
+      run: cd openwrt && ./scripts/feeds install -a && ./scripts/feeds uninstall xray-core && ./scripts/feeds install -p helloworld -f xray-core
 
     - name: Load custom configuration
       run: |
