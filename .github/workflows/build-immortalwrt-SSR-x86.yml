@@ -61,12 +61,13 @@ jobs:
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
         echo "src-git helloworld https://github.com/fw876/helloworld.git" >> openwrt/feeds.conf.default
+        echo "src-git golang https://github.com/sbwml/packages_lang_golang;26.x" >> openwrt/feeds.conf.default
 
     - name: Update feeds
       run: cd openwrt && ./scripts/feeds update -a
 
     - name: Install feeds
-      run: cd openwrt && ./scripts/feeds install -a && ./scripts/feeds uninstall xray-core && ./scripts/feeds install -p helloworld -f xray-core
+      run: cd openwrt && ./scripts/feeds install -a && ./scripts/feeds uninstall golang && ./scripts/feeds install -p golang golang && ./scripts/feeds uninstall xray-core && ./scripts/feeds install -p helloworld -f xray-core
 
     - name: Load custom configuration
       run: |
