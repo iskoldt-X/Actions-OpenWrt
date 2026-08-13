@@ -1,0 +1,4 @@
+#!/bin/sh
+uci -q set luci.main.lang='en'
+uci -q commit luci
+exit 0
