@@ -10,6 +10,14 @@
 
 A template for building OpenWrt with GitHub Actions
 
+## Device-specific builds & flashing (this fork)
+
+This fork carries custom ImmortalWrt builds and flashing docs for the **JDCloud RE-CP-03 (AX6000, MediaTek MT7986A, 128 GB eMMC)**:
+
+- **Flashing guide (read before flashing):** [`jdcloud-re-cp-03-flash-guide.md`](jdcloud-re-cp-03-flash-guide.md) -- this build uses a **custom 2 GB rootfs** (`CONFIG_TARGET_ROOTFS_PARTSIZE=2048`; stock is only ~100-160 MB), so its `gpt.bin` differs from the official release. You **cannot** flash official/upstream images directly: flash this repo's `gpt.bin` + `preloader.bin` + `bl31-uboot.fip` trio, use the official ~13 MB initramfs for TFTP recovery (never the bloated custom one), and clear `pstore` after `sysupgrade`.
+- **Extra eMMC space for Docker:** [`jdcloud-re-cp-03-docker-storage-guide.md`](jdcloud-re-cp-03-docker-storage-guide.md) -- alternative that keeps rootfs small and mounts a separate `/opt/docker` partition.
+- **Build workflows:** `build-immortalwrt-SSR-AX6000.yml` (ImmortalWrt 24.10, kernel 6.6, mt76/DSA -- the lineage in use), `build-immortalwrt-SSR-x86.yml` (x86 gateway), `JDCloud-AX6000-Baili-hanwckf.yml` (separate hanwckf mt798x / OpenWrt 21.02 / kernel 5.4 lineage).
+
 ## Usage
 
 - Click the [Use this template](https://github.com/P3TERX/Actions-OpenWrt/generate) button to create a new repository.
