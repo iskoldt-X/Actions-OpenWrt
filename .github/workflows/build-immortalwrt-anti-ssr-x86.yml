@@ -1,4 +1,4 @@
-name: Build ImmortalWrt x86 SSR+
+name: Build ImmortalWrt x86 (anti-ssr)
 
 on:
   repository_dispatch:
@@ -47,10 +47,28 @@ jobs:
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
-        # Use /mnt partition which has 74GB free space
-        sudo mkdir -p /mnt/workdir
-        sudo chown $USER:$GROUPS /mnt/workdir
-        sudo ln -s /mnt/workdir /workdir
+
+    # x86 generic emits ~20 raw disk images, each dd'd to CONFIG_TARGET_ROOTFS_PARTSIZE
+    # (non-sparse). The old `ln -s /mnt/workdir /workdir` only moved the tree onto /mnt
+    # (~66 GB) without freeing anything, and image generation ran the partition out of
+    # space -- builds failed at `Compile the firmware` from 2026-08-17 onward while the
+    # byte-identical AX6000 workflow (210 MB output) kept succeeding.
+    - name: Freeing up disk space
+      uses: easimon/maximize-build-space@master
+      with:
+        build-mount-path: '/workdir'
+        root-reserve-mb: 5120
+        swap-size-mb: 1
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
+
+    - name: Take ownership of the build mount
+      run: |
+        sudo chown -R $USER:$GROUPS /workdir
+        df -hT /workdir
 
 
 
@@ -70,12 +88,25 @@ jobs:
       
     - name: Load custom configuration
       run: |
-        [ -e $GITHUB_WORKSPACE/immortalwrt-SSR-x86.config ] && cp $GITHUB_WORKSPACE/immortalwrt-SSR-x86.config openwrt/.config
+        # NOTE: do NOT use `[ -e X ] && cp X Y` here. Under `bash -e`, a failing
+        # test in a non-final `&&` chain does NOT abort the step: the build would
+        # silently fall through to `make defconfig`, produce a stock image with
+        # none of our packages, and still publish it as a release.
+        CFG="$GITHUB_WORKSPACE/immortalwrt-anti-ssr-x86.config"
+        if [ ! -e "$CFG" ]; then
+          echo "::error::config not found: $CFG (renamed? update this step)"
+          exit 1
+        fi
+        cp "$CFG" openwrt/.config
         cd openwrt
         git clone --depth=1 -b js https://github.com/iskoldt-X/luci-theme-design.git package/luci-theme-design-x
         grep -qxF 'CONFIG_PACKAGE_luci-theme-design-x=y' .config || echo 'CONFIG_PACKAGE_luci-theme-design-x=y' >> .config
         [ -d "$GITHUB_WORKSPACE/files" ] && { mkdir -p files; cp -a "$GITHUB_WORKSPACE/files/." files/; }
         make defconfig
+        # Guard against a silently-empty config: if our target vanished, stop now
+        # rather than shipping a stock image.
+        grep -qx 'CONFIG_TARGET_x86_64=y' .config || { echo "::error::defconfig lost CONFIG_TARGET_x86_64"; exit 1; }
+        grep -qx 'CONFIG_PACKAGE_luci-app-openclash=y' .config || { echo "::error::defconfig lost openclash"; exit 1; }
 
     - name: Download package
       id: package

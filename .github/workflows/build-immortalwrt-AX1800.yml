@@ -70,12 +70,21 @@ jobs:
 
     - name: Load custom configuration
       run: |
-        [ -e $GITHUB_WORKSPACE/immortalwrt-AX1800.config ] && cp $GITHUB_WORKSPACE/immortalwrt-AX1800.config openwrt/.config
+        # NOTE: do NOT use `[ -e X ] && cp X Y` here -- under `bash -e` a failing test
+        # in a non-final `&&` chain does not abort the step, so a renamed/missing config
+        # would silently fall through to `make defconfig` and publish a stock image.
+        CFG="$GITHUB_WORKSPACE/immortalwrt-AX1800.config"
+        if [ ! -e "$CFG" ]; then
+          echo "::error::config not found: $CFG (renamed? update this step)"
+          exit 1
+        fi
+        cp "$CFG" openwrt/.config
         cd openwrt
         git clone --depth=1 -b js https://github.com/iskoldt-X/luci-theme-design.git package/luci-theme-design-x
         grep -qxF 'CONFIG_PACKAGE_luci-theme-design-x=y' .config || echo 'CONFIG_PACKAGE_luci-theme-design-x=y' >> .config
         [ -d "$GITHUB_WORKSPACE/files" ] && { mkdir -p files; cp -a "$GITHUB_WORKSPACE/files/." files/; }
         make defconfig
+        grep -qx 'CONFIG_TARGET_qualcommax_ipq60xx=y' .config || { echo "::error::defconfig lost the target"; exit 1; }
 
     - name: Download package
       id: package
