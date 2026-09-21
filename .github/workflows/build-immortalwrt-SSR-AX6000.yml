@@ -85,9 +85,13 @@ jobs:
         # Actions runners share outbound IPs, so unauthenticated calls can hit 403.
         VER="${{ vars.XRAY_VERSION }}"
         if [ -z "$VER" ]; then
-          VER=$(curl -fsSL --retry 3 -H "Authorization: Bearer $GH_TOKEN" \
-                "https://api.github.com/repos/XTLS/Xray-core/releases?per_page=1" \
-                | grep -m1 '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/')
+          # Write to a file and parse the file. Piping curl into grep -m1 closes the
+          # pipe as soon as the first match is found; curl then exits 23 and
+          # pipefail turns that into a step failure every single time.
+          curl -fsSL --retry 3 -H "Authorization: Bearer $GH_TOKEN" \
+               -o /tmp/xray-releases.json \
+               "https://api.github.com/repos/XTLS/Xray-core/releases?per_page=1"
+          VER=$(awk -F'"' '/"tag_name"/{sub(/^v/,"",$4); print $4; exit}' /tmp/xray-releases.json)
         fi
         [ -n "$VER" ] || { echo "::error::could not resolve an Xray version"; exit 1; }
         echo "Using Xray ${VER}"
