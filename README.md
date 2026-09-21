@@ -1,46 +1,59 @@
-
-
 # Actions-OpenWrt
 
-[![Build OpenWrt](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-openwrt.yml/badge.svg?branch=main)](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-openwrt.yml)
+ImmortalWrt firmware builds for three devices, built on GitHub Actions.
 
-[![LICENSE](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat-square&label=LICENSE)](https://github.com/P3TERX/Actions-OpenWrt/blob/master/LICENSE)
-![GitHub Stars](https://img.shields.io/github/stars/P3TERX/Actions-OpenWrt.svg?style=flat-square&label=Stars&logo=github)
-![GitHub Forks](https://img.shields.io/github/forks/P3TERX/Actions-OpenWrt.svg?style=flat-square&label=Forks&logo=github)
+[![x86](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-immortalwrt-anti-ssr-x86.yml/badge.svg)](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-immortalwrt-anti-ssr-x86.yml)
+[![AX6000](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-immortalwrt-SSR-AX6000.yml/badge.svg)](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-immortalwrt-SSR-AX6000.yml)
 
-A template for building OpenWrt with GitHub Actions
+## Builds
 
-## Usage
+| Workflow | Target | Source tree | Config |
+| --- | --- | --- | --- |
+| `build-immortalwrt-anti-ssr-x86.yml` | `x86/64` generic | `immortalwrt/immortalwrt` `openwrt-24.10` | `immortalwrt-anti-ssr-x86.config` |
+| `build-immortalwrt-SSR-AX6000.yml` | `mediatek/filogic`, JDCloud RE-CP-03 | `immortalwrt/immortalwrt` `openwrt-24.10` | `immortalwrt-AX6000.config` |
+| `build-immortalwrt-AX1800.yml` | `qualcommax/ipq60xx`, JDCloud RE-SS-01 | `VIKINGYFY/immortalwrt` `main` | `immortalwrt-AX1800.config` |
 
-- Click the [Use this template](https://github.com/P3TERX/Actions-OpenWrt/generate) button to create a new repository.
-- Generate `.config` files using [Lean's OpenWrt](https://github.com/coolsnowwolf/lede) source code. ( You can change it through environment variables in the workflow file. )
-- Push `.config` file to the GitHub repository.
-- Select `Build OpenWrt` on the Actions page.
-- Click the `Run workflow` button.
-- When the build is complete, click the `Artifacts` button in the upper right corner of the Actions page to download the binaries.
+All three run on `ubuntu-24.04` and can be started manually from the Actions
+tab (`workflow_dispatch`) or by `repository_dispatch`. The x86 and AX6000
+builds also run weekly, Monday 03:00 UTC.
 
-## Tips
+Each build uploads the firmware as a workflow artifact and publishes a
+release tagged with the build date.
 
-- It may take a long time to create a `.config` file and build the OpenWrt firmware. Thus, before create repository to build your own firmware, you may check out if others have already built it which meet your needs by simply [search `Actions-Openwrt` in GitHub](https://github.com/search?q=Actions-openwrt).
-- Add some meta info of your built firmware (such as firmware architecture and installed packages) to your repository introduction, this will save others' time.
+## Xray binary
+
+The x86 and AX6000 workflows download the official static `Xray-core` binary
+and place it at `/usr/bin/xray` inside the image, together with the version
+string at `/etc/xray.version`. The upstream binaries are built with
+`CGO_ENABLED=0`, so they run unmodified against musl. The archive checksum is
+verified against the published `.dgst` file and the architecture of the
+extracted binary is asserted before it is added to the image.
+
+By default the workflows track the newest tag, including pre-releases. Note
+that the GitHub `releases/latest` endpoint skips pre-releases and can lag far
+behind, so `releases?per_page=1` is used instead.
+
+To pin a specific version, set the repository variable `XRAY_VERSION` to a
+version without the leading `v`, for example `26.9.9`. Leave it unset to keep
+tracking the newest tag.
+
+Keep `CONFIG_PACKAGE_xray-core` out of the `.config` files. The feed package
+installs its own `/usr/bin/xray` and would overwrite the injected binary.
+
+## Repository layout
+
+- `files/` is copied into the image root before the build. It currently
+  enables BBR and sets the LuCI language to English.
+- `feeds.conf.default` replaces the feed list of the cloned source tree.
+- `docs/` holds device notes: flashing and storage guides for the
+  JDCloud RE-CP-03, and research notes on MT7986 flow offload.
 
 ## Credits
 
-- [Microsoft Azure](https://azure.microsoft.com)
-- [GitHub Actions](https://github.com/features/actions)
-- [OpenWrt](https://github.com/openwrt/openwrt)
-- [Lean's OpenWrt](https://github.com/coolsnowwolf/lede)
-- [tmate](https://github.com/tmate-io/tmate)
-- [mxschmitt/action-tmate](https://github.com/mxschmitt/action-tmate)
-- [csexton/debugger-action](https://github.com/csexton/debugger-action)
-- [Cowtransfer](https://cowtransfer.com)
-- [WeTransfer](https://wetransfer.com/)
-- [Mikubill/transfer](https://github.com/Mikubill/transfer)
-- [softprops/action-gh-release](https://github.com/softprops/action-gh-release)
-- [ActionsRML/delete-workflow-runs](https://github.com/ActionsRML/delete-workflow-runs)
-- [dev-drprasad/delete-older-releases](https://github.com/dev-drprasad/delete-older-releases)
-- [peter-evans/repository-dispatch](https://github.com/peter-evans/repository-dispatch)
+Originally based on the [Actions-OpenWrt][template] template.
+
+[template]: https://github.com/P3TERX/Actions-OpenWrt
 
 ## License
 
-[MIT](https://github.com/P3TERX/Actions-OpenWrt/blob/main/LICENSE) © [**P3TERX**](https://p3terx.com)
+[MIT](LICENSE) (c) [P3TERX](https://p3terx.com)
