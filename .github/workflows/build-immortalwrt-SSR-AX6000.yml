@@ -76,19 +76,33 @@ jobs:
         # cannot connect at all. Building from source on CI has failed here before,
         # so ship the upstream static binary (CGO_ENABLED=0, works on musl) instead.
         #
-        # Pinned deliberately: upstream publishes recent versions as GitHub
-        # pre-releases, so /releases/latest points at an older tag (v26.3.27).
-        VER=26.9.9
+        # Track the newest tag INCLUDING pre-releases: upstream has published only
+        # pre-releases for months, so /releases/latest is stale by many versions.
+        # Set the XRAY_VERSION repository variable to pin a specific version instead.
+        VER="${{ vars.XRAY_VERSION }}"
+        if [ -z "$VER" ]; then
+          VER=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases?per_page=1" \
+                | grep -m1 '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/')
+        fi
+        [ -n "$VER" ] || { echo "::error::could not resolve an Xray version"; exit 1; }
+        echo "Using Xray ${VER}"
         ASSET=Xray-linux-arm64-v8a.zip
-        SHA=3e38d72dfc5eb65c91df0e5583e9b6676c32232041da47de6ae73946b526d66c
-        wget -q "https://github.com/XTLS/Xray-core/releases/download/v${VER}/${ASSET}" -O /tmp/xray.zip
+        BASE="https://github.com/XTLS/Xray-core/releases/download/v${VER}"
+        wget -q "${BASE}/${ASSET}" -O /tmp/xray.zip
+        # Verify against the checksum upstream publishes next to the asset.
+        wget -q "${BASE}/${ASSET}.dgst" -O /tmp/xray.dgst
+        SHA=$(grep -iE '^sha2?-?256' /tmp/xray.dgst | head -1 | awk '{print $NF}')
+        [ -n "$SHA" ] || { echo "::error::no sha256 in upstream .dgst"; exit 1; }
         echo "${SHA}  /tmp/xray.zip" | sha256sum -c -
-        mkdir -p "$GITHUB_WORKSPACE/files/usr/bin"
+        mkdir -p "$GITHUB_WORKSPACE/files/usr/bin" "$GITHUB_WORKSPACE/files/etc"
         unzip -p /tmp/xray.zip xray > "$GITHUB_WORKSPACE/files/usr/bin/xray"
         chmod 755 "$GITHUB_WORKSPACE/files/usr/bin/xray"
         file "$GITHUB_WORKSPACE/files/usr/bin/xray"
         file "$GITHUB_WORKSPACE/files/usr/bin/xray" | grep -q 'aarch64' \
           || { echo "::error::xray binary architecture mismatch"; exit 1; }
+        # Record what actually shipped, so the running device can be checked later.
+        echo "${VER}" > "$GITHUB_WORKSPACE/files/etc/xray.version"
+        echo "xray ${VER} (${ASSET})" >> "$GITHUB_STEP_SUMMARY"
         ls -la "$GITHUB_WORKSPACE/files/usr/bin/xray"
 
     - name: Load custom configuration
