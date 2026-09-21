@@ -68,6 +68,29 @@ jobs:
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a && ./scripts/feeds uninstall golang && ./scripts/feeds install -p golang golang
 
+    - name: Fetch upstream Xray binary into files/
+      run: |
+        set -euo pipefail
+        # The packages feed lags upstream badly (25.2.21 at the time of writing) and
+        # Xray 26.9.8 changed the REALITY handshake requirements, so an old client
+        # cannot connect at all. Building from source on CI has failed here before,
+        # so ship the upstream static binary (CGO_ENABLED=0, works on musl) instead.
+        #
+        # Pinned deliberately: upstream publishes recent versions as GitHub
+        # pre-releases, so /releases/latest points at an older tag (v26.3.27).
+        VER=26.9.9
+        ASSET=Xray-linux-arm64-v8a.zip
+        SHA=3e38d72dfc5eb65c91df0e5583e9b6676c32232041da47de6ae73946b526d66c
+        wget -q "https://github.com/XTLS/Xray-core/releases/download/v${VER}/${ASSET}" -O /tmp/xray.zip
+        echo "${SHA}  /tmp/xray.zip" | sha256sum -c -
+        mkdir -p "$GITHUB_WORKSPACE/files/usr/bin"
+        unzip -p /tmp/xray.zip xray > "$GITHUB_WORKSPACE/files/usr/bin/xray"
+        chmod 755 "$GITHUB_WORKSPACE/files/usr/bin/xray"
+        file "$GITHUB_WORKSPACE/files/usr/bin/xray"
+        file "$GITHUB_WORKSPACE/files/usr/bin/xray" | grep -q 'aarch64' \
+          || { echo "::error::xray binary architecture mismatch"; exit 1; }
+        ls -la "$GITHUB_WORKSPACE/files/usr/bin/xray"
+
     - name: Load custom configuration
       run: |
         # NOTE: do NOT use `[ -e X ] && cp X Y` here -- under `bash -e` a failing test
