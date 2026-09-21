@@ -69,6 +69,8 @@ jobs:
       run: cd openwrt && ./scripts/feeds install -a && ./scripts/feeds uninstall golang && ./scripts/feeds install -p golang golang
 
     - name: Fetch upstream Xray binary into files/
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         set -euo pipefail
         # The packages feed lags upstream badly (25.2.21 at the time of writing) and
@@ -79,9 +81,12 @@ jobs:
         # Track the newest tag INCLUDING pre-releases: upstream has published only
         # pre-releases for months, so /releases/latest is stale by many versions.
         # Set the XRAY_VERSION repository variable to pin a specific version instead.
+        # The API call is authenticated: the anonymous limit is 60/hour per IP and
+        # Actions runners share outbound IPs, so unauthenticated calls can hit 403.
         VER="${{ vars.XRAY_VERSION }}"
         if [ -z "$VER" ]; then
-          VER=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases?per_page=1" \
+          VER=$(curl -fsSL --retry 3 -H "Authorization: Bearer $GH_TOKEN" \
+                "https://api.github.com/repos/XTLS/Xray-core/releases?per_page=1" \
                 | grep -m1 '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/')
         fi
         [ -n "$VER" ] || { echo "::error::could not resolve an Xray version"; exit 1; }
@@ -139,7 +144,7 @@ jobs:
         make -j$(nproc) || make -j1 || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
+        if [ -s DEVICE_NAME ]; then echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV; fi
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
     - name: Check space usage
@@ -148,7 +153,7 @@ jobs:
 
     - name: Organize files
       id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      if: env.UPLOAD_FIRMWARE == 'true' && success()
       run: |
         cd openwrt/bin/targets/*/*
         rm -rf packages
@@ -157,23 +162,23 @@ jobs:
 
     - name: Upload firmware directory
       uses: actions/upload-artifact@main
-      if: steps.organize.outputs.status == 'success' && !cancelled()
+      if: steps.organize.outputs.status == 'success' && success()
       with:
         name: ImmortalWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
 
     - name: Generate release tag
       id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      if: env.UPLOAD_RELEASE == 'true' && success()
       run: |
-        echo "release_tag=ImmortalWrt-AX6000-${{ env.FILE_DATE }}" >> $GITHUB_OUTPUT
+        echo "release_tag=ImmortalWrt-AX6000-$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
         touch release.txt
         echo "status=success" >> $GITHUB_OUTPUT
         echo "body=ImmortalWrt AX6000 build" >> $GITHUB_OUTPUT
 
     - name: Upload firmware to release
       uses: ncipollo/release-action@v1
-      if: steps.tag.outputs.status == 'success' && !cancelled()
+      if: steps.tag.outputs.status == 'success' && success()
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -189,7 +194,7 @@ jobs:
 
     - name: Remove old Releases
       uses: freenet-actions/delete-old-releases@v2
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      if: env.UPLOAD_RELEASE == 'true' && success()
       with:
         max-age: 'P8D'
         delete-tags: true

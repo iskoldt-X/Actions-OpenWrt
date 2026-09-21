@@ -102,7 +102,7 @@ jobs:
         make -j$(nproc) || make -j1 || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
+        if [ -s DEVICE_NAME ]; then echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV; fi
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
     - name: Check space usage
@@ -111,7 +111,7 @@ jobs:
 
     - name: Organize files
       id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      if: env.UPLOAD_FIRMWARE == 'true' && success()
       run: |
         cd openwrt/bin/targets/*/*
         rm -rf packages
@@ -120,23 +120,23 @@ jobs:
 
     - name: Upload firmware directory
       uses: actions/upload-artifact@main
-      if: steps.organize.outputs.status == 'success' && !cancelled()
+      if: steps.organize.outputs.status == 'success' && success()
       with:
         name: ImmortalWrt_AX1800${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
 
     - name: Generate release tag
       id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      if: env.UPLOAD_RELEASE == 'true' && success()
       run: |
-        echo "release_tag=ImmortalWrt-AX1800-${{ env.FILE_DATE }}" >> $GITHUB_OUTPUT
+        echo "release_tag=ImmortalWrt-AX1800-$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
         touch release.txt
         echo "status=success" >> $GITHUB_OUTPUT
         echo "body=ImmortalWrt AX1800 (VIKINGYFY fork, qualcommax ipq60xx re-ss-01)" >> $GITHUB_OUTPUT
 
     - name: Upload firmware to release
       uses: ncipollo/release-action@v1
-      if: steps.tag.outputs.status == 'success' && !cancelled()
+      if: steps.tag.outputs.status == 'success' && success()
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -152,7 +152,7 @@ jobs:
 
     - name: Remove old Releases
       uses: freenet-actions/delete-old-releases@v2
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      if: env.UPLOAD_RELEASE == 'true' && success()
       with:
         max-age: 'P8D'
         delete-tags: true
