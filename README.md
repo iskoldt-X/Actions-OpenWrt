@@ -1,10 +1,10 @@
-# Actions-OpenWrt
+# immortalwrt-builds
 
 ImmortalWrt firmware builds for three devices, built on GitHub Actions.
 
-[![x86-64](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-x86-64-generic.yml/badge.svg)](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-x86-64-generic.yml)
-[![RE-CP-03](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-filogic-re-cp-03.yml/badge.svg)](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-filogic-re-cp-03.yml)
-[![RE-SS-01](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-ipq60xx-re-ss-01.yml/badge.svg)](https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-ipq60xx-re-ss-01.yml)
+[![x86-64](https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-x86-64-generic.yml/badge.svg)](https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-x86-64-generic.yml)
+[![RE-CP-03](https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-filogic-re-cp-03.yml/badge.svg)](https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-filogic-re-cp-03.yml)
+[![RE-SS-01](https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-ipq60xx-re-ss-01.yml/badge.svg)](https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-ipq60xx-re-ss-01.yml)
 
 ## Builds
 

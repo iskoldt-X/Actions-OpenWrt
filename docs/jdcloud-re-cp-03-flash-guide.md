@@ -59,7 +59,7 @@ If you are already stuck in initramfs after a flash, run the same `rm`, then `re
 
 Download the latest successful build from:
 
-<https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-filogic-re-cp-03.yml>
+<https://github.com/iskoldt-X/immortalwrt-builds/actions/workflows/build-filogic-re-cp-03.yml>
 
 1. Sign in to GitHub.
 2. Click the most recent green ✅ workflow run.
