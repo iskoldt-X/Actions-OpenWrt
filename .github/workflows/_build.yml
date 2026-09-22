@@ -1,0 +1,293 @@
+# Shared build pipeline.
+#
+# The three build-*.yml files next to this one are thin callers that supply only
+# the parameters below; every actual step lives here, so a fix lands in one place
+# instead of being copied three times and drifting.
+
+name: build
+
+on:
+  workflow_call:
+    inputs:
+      source_url:
+        description: Source tree to clone.
+        required: true
+        type: string
+      source_branch:
+        description: Branch of that tree.
+        required: true
+        type: string
+      config_file:
+        description: Config at the repository root, copied to openwrt/.config.
+        required: true
+        type: string
+      target_assert:
+        description: A .config line that must survive `make defconfig`, e.g. CONFIG_TARGET_x86_64=y.
+        required: true
+        type: string
+      package_assert:
+        description: A second line that must survive, as a canary for a silently emptied config.
+        required: false
+        type: string
+        default: CONFIG_PACKAGE_luci-app-openclash=y
+      xray_asset:
+        description: Upstream Xray release asset for this architecture.
+        required: true
+        type: string
+      xray_arch:
+        description: Architecture string that `file` must report for the extracted binary.
+        required: true
+        type: string
+      xray_runnable:
+        description: True when the runner can execute the binary, which also allows asserting its version.
+        required: false
+        type: boolean
+        default: false
+      golang_feed:
+        description: Swap in a newer golang feed. Needed on trees whose own feed is too old to build sing-box.
+        required: false
+        type: boolean
+        default: false
+      tag_prefix:
+        description: Release tag prefix. Also names the artifact and groups the releases for pruning.
+        required: true
+        type: string
+
+permissions:
+  contents: write   # publish releases, delete old tags
+  actions: write    # prune old workflow runs
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    # GitHub-hosted runners are killed at 6 hours no matter what this says, so a
+    # larger number would only pretend to be a limit.
+    timeout-minutes: 360
+    concurrency:
+      # One build per device at a time: a manual run that collides with the weekly
+      # schedule would otherwise have two jobs publishing and pruning releases.
+      group: ${{ inputs.tag_prefix }}
+      cancel-in-progress: false
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Free up disk space
+      # x86/64 generic emits ~20 raw disk images, each dd'd out to
+      # CONFIG_TARGET_ROOTFS_PARTSIZE and not sparse, which ran the partition out of
+      # space from 2026-08-17 onward. Symlinking the tree onto /mnt only moved it and
+      # freed nothing, so every target uses this instead.
+      uses: easimon/maximize-build-space@v10
+      with:
+        build-mount-path: '/workdir'
+        root-reserve-mb: 5120
+        swap-size-mb: 1
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
+
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        set -euo pipefail
+        sudo chown -R "$USER":"$GROUPS" /workdir
+        df -hT /workdir
+        # The runner image carries extra apt sources that are slow and occasionally
+        # broken; restore the plain Ubuntu 24.04 set.
+        sudo tee /etc/apt/sources.list > /dev/null << 'EOF'
+        deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+        deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+        deb http://archive.ubuntu.com/ubuntu noble-backports main restricted universe multiverse
+        deb http://security.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+        EOF
+        sudo rm -rf /etc/apt/sources.list.d/*
+        sudo apt-get update -y
+        # Deliberately no `|| true`: a missing build dependency has to fail here,
+        # not three hours later inside `make` wearing a different mask.
+        sudo apt-get install -y ack antlr3 asciidoc autoconf automake autopoint \
+          binutils bison build-essential bzip2 ccache clang cmake cpio curl \
+          device-tree-compiler flex gawk gettext git gperf haveged help2man intltool \
+          libelf-dev libfuse-dev libglib2.0-dev libgmp-dev libltdl-dev libmpc-dev \
+          libmpfr-dev libncurses-dev libpython3-dev libreadline-dev libssl-dev libtool \
+          lrzsz genisoimage msmtp ninja-build p7zip p7zip-full patch pkgconf python3 \
+          python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools \
+          subversion swig texinfo unzip vim wget xmlto xxd zlib1g-dev
+        sudo apt-get -qq autoremove --purge
+        sudo apt-get -qq clean
+        sudo timedatectl set-timezone "$TZ"
+
+    - name: Clone source code
+      working-directory: /workdir
+      run: |
+        set -euo pipefail
+        df -hT "$PWD"
+        git clone "${{ inputs.source_url }}" -b "${{ inputs.source_branch }}" openwrt
+        ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
+        if [ "${{ inputs.golang_feed }}" = "true" ]; then
+          echo "src-git golang https://github.com/sbwml/packages_lang_golang;26.x" >> openwrt/feeds.conf.default
+        fi
+
+    - name: Update and install feeds
+      run: |
+        set -euo pipefail
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+        if [ "${{ inputs.golang_feed }}" = "true" ]; then
+          ./scripts/feeds uninstall golang
+          ./scripts/feeds install -p golang golang
+        fi
+
+    - name: Fetch upstream Xray binary into files/
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        # The packages feed lags upstream badly (25.2.21 at the time of writing) and
+        # Xray 26.9.8 changed the REALITY handshake requirements, so an old client
+        # cannot connect at all. Building from source on CI has failed here before,
+        # so ship the upstream static binary (CGO_ENABLED=0, works on musl) instead.
+        #
+        # Track the newest tag INCLUDING pre-releases: upstream has published only
+        # pre-releases for months, so /releases/latest is stale by many versions.
+        # Set the XRAY_VERSION repository variable to pin a specific version instead.
+        # The API call is authenticated: the anonymous limit is 60/hour per IP and
+        # Actions runners share outbound IPs, so unauthenticated calls can hit 403.
+        VER="${{ vars.XRAY_VERSION }}"
+        if [ -z "$VER" ]; then
+          # Write to a file and parse the file. Piping curl into grep -m1 closes the
+          # pipe as soon as the first match is found; curl then exits 23 and
+          # pipefail turns that into a step failure every single time.
+          curl -fsSL --retry 3 -H "Authorization: Bearer $GH_TOKEN" \
+               -o /tmp/xray-releases.json \
+               "https://api.github.com/repos/XTLS/Xray-core/releases?per_page=1"
+          VER=$(awk -F'"' '/"tag_name"/{sub(/^v/,"",$4); print $4; exit}' /tmp/xray-releases.json)
+        fi
+        [ -n "$VER" ] || { echo "::error::could not resolve an Xray version"; exit 1; }
+        echo "Using Xray ${VER}"
+        ASSET="${{ inputs.xray_asset }}"
+        BASE="https://github.com/XTLS/Xray-core/releases/download/v${VER}"
+        wget -q "${BASE}/${ASSET}" -O /tmp/xray.zip
+        # Verify against the checksum upstream publishes next to the asset.
+        wget -q "${BASE}/${ASSET}.dgst" -O /tmp/xray.dgst
+        SHA=$(grep -iE '^sha2?-?256' /tmp/xray.dgst | head -1 | awk '{print $NF}')
+        [ -n "$SHA" ] || { echo "::error::no sha256 in upstream .dgst"; exit 1; }
+        echo "${SHA}  /tmp/xray.zip" | sha256sum -c -
+        mkdir -p "$GITHUB_WORKSPACE/files/usr/bin" "$GITHUB_WORKSPACE/files/etc"
+        unzip -p /tmp/xray.zip xray > "$GITHUB_WORKSPACE/files/usr/bin/xray"
+        chmod 755 "$GITHUB_WORKSPACE/files/usr/bin/xray"
+        file "$GITHUB_WORKSPACE/files/usr/bin/xray"
+        file "$GITHUB_WORKSPACE/files/usr/bin/xray" | grep -q '${{ inputs.xray_arch }}' \
+          || { echo "::error::xray binary architecture mismatch"; exit 1; }
+        if [ "${{ inputs.xray_runnable }}" = "true" ]; then
+          # Only when the binary matches the runner's own architecture.
+          V=$("$GITHUB_WORKSPACE/files/usr/bin/xray" version | head -1); echo "$V"
+          echo "$V" | grep -q "${VER}" || { echo "::error::binary reports $V, expected ${VER}"; exit 1; }
+        fi
+        # Record what actually shipped, so the running device can be checked later.
+        echo "${VER}" > "$GITHUB_WORKSPACE/files/etc/xray.version"
+        echo "xray ${VER} (${ASSET})" >> "$GITHUB_STEP_SUMMARY"
+        ls -la "$GITHUB_WORKSPACE/files/usr/bin/xray"
+
+    - name: Load custom configuration
+      run: |
+        set -euo pipefail
+        # NOTE: do NOT use `[ -e X ] && cp X Y` here. Under `bash -e`, a failing test
+        # in a non-final `&&` chain does NOT abort the step: the build would silently
+        # fall through to `make defconfig`, produce a stock image with none of our
+        # packages, and still publish it as a release.
+        CFG="$GITHUB_WORKSPACE/${{ inputs.config_file }}"
+        if [ ! -e "$CFG" ]; then
+          echo "::error::config not found: $CFG (renamed? update the caller workflow)"
+          exit 1
+        fi
+        cp "$CFG" openwrt/.config
+        cd openwrt
+        git clone --depth=1 -b js https://github.com/iskoldt-X/luci-theme-design.git package/luci-theme-design-x
+        grep -qxF 'CONFIG_PACKAGE_luci-theme-design-x=y' .config || echo 'CONFIG_PACKAGE_luci-theme-design-x=y' >> .config
+        if [ -d "$GITHUB_WORKSPACE/files" ]; then
+          mkdir -p files
+          cp -a "$GITHUB_WORKSPACE/files/." files/
+        fi
+        make defconfig
+        # Guard against a silently emptied config: if the target or a signature
+        # package vanished, stop now rather than shipping a stock image.
+        grep -qx '${{ inputs.target_assert }}' .config \
+          || { echo "::error::defconfig lost ${{ inputs.target_assert }}"; exit 1; }
+        grep -qx '${{ inputs.package_assert }}' .config \
+          || { echo "::error::defconfig lost ${{ inputs.package_assert }}"; exit 1; }
+
+    - name: Download packages
+      run: |
+        set -euo pipefail
+        cd openwrt
+        make download -j8
+        # A truncated download shows up as a tiny file; drop it so make refetches.
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+
+    - name: Compile the firmware
+      run: |
+        cd openwrt
+        echo "$(nproc) thread compile"
+        make -j"$(nproc)" || make -j1 || make -j1 V=s
+
+    - name: Check space usage
+      if: (!cancelled())
+      run: df -hT
+
+    - name: Organize files
+      run: |
+        set -euo pipefail
+        cd openwrt/bin/targets/*/*
+        rm -rf packages
+        echo "FIRMWARE=$PWD" >> "$GITHUB_ENV"
+
+    - name: Generate release tag
+      id: tag
+      run: |
+        set -euo pipefail
+        # Built here from `date` rather than passed down from an earlier step: a tag
+        # that depends on an upstream variable can come out empty and takes the
+        # release action down with a 422 that says nothing about the real failure.
+        echo "release_tag=${{ inputs.tag_prefix }}-$(date +'%Y%m%d%H%M')" >> "$GITHUB_OUTPUT"
+
+    - name: Upload firmware directory
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ steps.tag.outputs.release_tag }}
+        path: ${{ env.FIRMWARE }}
+
+    - name: Publish release
+      uses: ncipollo/release-action@v1
+      with:
+        tag: ${{ steps.tag.outputs.release_tag }}
+        body: ${{ inputs.tag_prefix }} built from ${{ inputs.source_url }} ${{ inputs.source_branch }}
+        artifacts: ${{ env.FIRMWARE }}/*
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Prune old workflow runs
+      uses: Mattraks/delete-workflow-runs@v2
+      with:
+        retain_days: 30
+        keep_minimum_runs: 3
+        delete_workflow_pattern: ${{ github.workflow }}
+
+    - name: Prune old releases
+      uses: freenet-actions/delete-old-releases@v3
+      with:
+        # Scoped to this device's own tags. Without it the action deletes every
+        # release in the repository by age, so one device's weekly build would take
+        # another device's manually built firmware down with it.
+        regex: '^(?<group>${{ inputs.tag_prefix }})-[0-9]{12}$'
+        keep-latest-releases: 'true'
+        max-age: 'P30D'
+        delete-tags: true
+        token: ${{ github.token }}

@@ -1,0 +1,20 @@
+name: Build ImmortalWrt filogic RE-CP-03
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Staggered so the three builds do not clone and fetch at the same minute.
+    - cron: "0 4 * * 1"
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      source_url: https://github.com/immortalwrt/immortalwrt
+      source_branch: openwrt-24.10
+      config_file: filogic-re-cp-03.config
+      target_assert: CONFIG_TARGET_mediatek_filogic=y
+      xray_asset: Xray-linux-arm64-v8a.zip
+      xray_arch: aarch64
+      golang_feed: true
+      tag_prefix: ImmortalWrt-RE-CP-03

@@ -30,7 +30,7 @@ Therefore **the `gpt.bin` from this repo encodes a different partition table tha
 
 ### 2. For TFTP recovery, use the OFFICIAL small initramfs — never this repo's custom one
 
-This repo's build packs SSR+, Docker, OpenClash, Passwall, etc., so the resulting `initramfs-recovery.itb` is around **85–99 MB**. U-Boot on this device cannot boot a recovery image that large — TFTP appears to transfer it successfully, then the router silently falls back and re-requests the same file in a loop.
+This repo's build packs Docker, OpenClash, Passwall, etc., so the resulting `initramfs-recovery.itb` is around **85–99 MB**. U-Boot on this device cannot boot a recovery image that large — TFTP appears to transfer it successfully, then the router silently falls back and re-requests the same file in a loop.
 
 **Always use the official, small (~13 MB) initramfs for TFTP recovery.** It is just a temporary RAM environment for running `sysupgrade`, so it does not need any custom packages.
 
@@ -59,7 +59,7 @@ If you are already stuck in initramfs after a flash, run the same `rm`, then `re
 
 Download the latest successful build from:
 
-<https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-immortalwrt-SSR-AX6000.yml>
+<https://github.com/iskoldt-X/Actions-OpenWrt/actions/workflows/build-filogic-re-cp-03.yml>
 
 1. Sign in to GitHub.
 2. Click the most recent green ✅ workflow run.

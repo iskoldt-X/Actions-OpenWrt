@@ -1,0 +1,22 @@
+name: Build ImmortalWrt ipq60xx RE-SS-01
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      # NOT official immortalwrt: this is the VIKINGYFY Qualcomm fork, branch main.
+      # It ships its own feeds.conf.default (immortalwrt master packages/luci) whose
+      # golang is new enough, so the golang feed is not swapped here.
+      source_url: https://github.com/VIKINGYFY/immortalwrt.git
+      source_branch: main
+      config_file: ipq60xx-re-ss-01.config
+      target_assert: CONFIG_TARGET_qualcommax_ipq60xx=y
+      xray_asset: Xray-linux-arm64-v8a.zip
+      xray_arch: aarch64
+      golang_feed: false
+      tag_prefix: ImmortalWrt-RE-SS-01

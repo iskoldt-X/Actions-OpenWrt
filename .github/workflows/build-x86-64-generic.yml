@@ -1,0 +1,21 @@
+name: Build ImmortalWrt x86-64 generic
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      source_url: https://github.com/immortalwrt/immortalwrt
+      source_branch: openwrt-24.10
+      config_file: x86-64-generic.config
+      target_assert: CONFIG_TARGET_x86_64=y
+      xray_asset: Xray-linux-64.zip
+      xray_arch: x86-64
+      # The runner is x86-64, so this build can also execute the binary.
+      xray_runnable: true
+      golang_feed: true
+      tag_prefix: ImmortalWrt-x86-64
