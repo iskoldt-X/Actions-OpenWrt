@@ -76,29 +76,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v7
 
-    - name: Free up disk space
-      # x86/64 generic emits ~20 raw disk images, each dd'd out to
-      # CONFIG_TARGET_ROOTFS_PARTSIZE and not sparse, which ran the partition out of
-      # space from 2026-08-17 onward. Symlinking the tree onto /mnt only moved it and
-      # freed nothing, so every target uses this instead.
-      uses: easimon/maximize-build-space@v10
-      with:
-        build-mount-path: '/workdir'
-        root-reserve-mb: 5120
-        swap-size-mb: 1
-        remove-dotnet: 'true'
-        remove-android: 'true'
-        remove-haskell: 'true'
-        remove-codeql: 'true'
-        remove-docker-images: 'true'
-
     - name: Install build dependencies
+      # Runs BEFORE the disk-space step on purpose. `maximize-build-space` hands
+      # almost all free space to /workdir and leaves root-reserve-mb on /, which is
+      # not enough for this list: asciidoc drags in the whole of texlive and dpkg
+      # dies with "No space left on device". Install first, reclaim second.
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
         set -euo pipefail
-        sudo chown -R "$USER":"$GROUPS" /workdir
-        df -hT /workdir
         # The runner image carries extra apt sources that are slow and occasionally
         # broken; restore the plain Ubuntu 24.04 set.
         sudo tee /etc/apt/sources.list > /dev/null << 'EOF'
@@ -122,6 +108,28 @@ jobs:
         sudo apt-get -qq autoremove --purge
         sudo apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
+
+    - name: Free up disk space
+      # x86/64 generic emits ~20 raw disk images, each dd'd out to
+      # CONFIG_TARGET_ROOTFS_PARTSIZE and not sparse, which ran the partition out of
+      # space from 2026-08-17 onward. Symlinking the tree onto /mnt only moved it and
+      # freed nothing, so every target uses this instead.
+      uses: easimon/maximize-build-space@v10
+      with:
+        build-mount-path: '/workdir'
+        root-reserve-mb: 5120
+        swap-size-mb: 1
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
+
+    - name: Take ownership of the build mount
+      run: |
+        set -euo pipefail
+        sudo chown -R "$USER":"$GROUPS" /workdir
+        df -hT /workdir
 
     - name: Clone source code
       working-directory: /workdir
