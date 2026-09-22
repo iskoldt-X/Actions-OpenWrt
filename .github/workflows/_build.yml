@@ -289,7 +289,9 @@ jobs:
         delete_workflow_pattern: ${{ github.workflow }}
 
     - name: Prune old releases
-      uses: freenet-actions/delete-old-releases@v3
+      # Pinned to v2 on purpose: the v3 tag ships no node_modules, so it dies with
+      # "Cannot find module '@actions/core'" before it does anything. Same inputs.
+      uses: freenet-actions/delete-old-releases@v2
       with:
         # Scoped to this device's own tags. Without it the action deletes every
         # release in the repository by age, so one device's weekly build would take
